@@ -1,5 +1,5 @@
 # Next.js 13 연습 - 게시판 구현
-
+> stacks : Next.js, mongoDB
 
 <br>
 
@@ -8,12 +8,14 @@
 # Database
 - 관계형 : PostgreSQL, MySQL, Oracle...
   - 데이터를 표로 저장 가능하다
-  ![Alt text](image.png)
+
+![Alt text](image.png)
+
 - 비관계형 : mongoDB, Cloud firestore, cassandra...
   - 데이터 저장 방식이 자유롭다
   - 관계형 DB처럼 SQL문법이 필요없다 - 초심자들이 사용하기 좋다
   - 분산처리를 잘해준다 - 많은 입출력의 데이터 처리에 유용하다
-  ```json
+  ```
   {
     data1 : content1,
     data2 : content2,
@@ -66,7 +68,7 @@ export { connectDB }
 
 ---
 
-# 다이나믹 라우팅 - only client component
+# Client component 다이나믹 라우팅
 ```js
 'use client'
 
@@ -89,5 +91,4 @@ export default function DetailLink(){
     4. router.refresh() : soft refresh -> 이전과 바뀐점을 분석해서 바뀐 부분만 새로고침 
     5. router.prefetch('/주소') : '/주소'의 내용을 미리 로드해준다.
 */
-
 ```
