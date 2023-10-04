@@ -1,6 +1,7 @@
 # Next.js 13 연습 - 게시판 구현
 > stacks : Next.js, mongoDB
-
+>
+> 참고 : https://codingapple.com/course/next-js/
 <br>
 
 ---
@@ -92,3 +93,59 @@ export default function DetailLink(){
     5. router.prefetch('/주소') : '/주소'의 내용을 미리 로드해준다.
 */
 ```
+
+<br>
+
+---
+
+# 3-tier architecture
+![3-tier architecture](image-4.png)
+- 유저가 정보를 입력하면 DB에 바로 저장하는 개발 방식은 X
+- 중간에 프로그램(서버)을 하나 두어야 한다.
+  - 글 작성 -> 서버에 글 저장 요청 -> 서버는 검사 후 DB에 저장
+
+# Next.js에서 서버를 만들어보자
+### 두 가지 방법이 있다.
+1. app / api폴더에 서버 기능을 만드는 것이 더 신버전 방법이지만, 아직 완벽하지 않기 때문에, 2번 방법으로 개발해보자.
+2. 루트 경로에 pages / api폴더 안에 서버 기능을 만들자.
+- pages/api/sever.js를 생성 후 get방식으로 테스트를 해보자
+
+![Alt text](image-11.png)
+- http://localhost:3000/api/server로 get방식 요청 시
+
+![Alt text](image-8.png)
+- 정상적으로 동작한다, 다만 요청에 응답을 해주지 않으면  하기와 같이 무한로딩에 빠진다. 
+
+![Alt text](image-9.png)
+- 이를 방지하기 위해선 응답 처리를 해줘야한다.
+
+![Alt text](image-12.png)
+- 처리 성공 : status(200)
+- 처리 실패 : status(500)
+- 처리 실패(클라이언트쪽 실수) : status(400)
+- 정확한 응답과 처리를 위해선 status code를 검색 후 사용하자
+
+![Alt text](image-13.png)
+- 더 이상 무한 로딩이 되지 않는다, 응답도 잘 받는다.
+
+![Alt text](image-2.png)
+- POST 요청도 해보자.
+- 가장 쉬운 방법은 form태그를 사용하는 것이다.
+- form태그는 put과 delete는 사용할 수 없다.
+
+![Alt text](image-5.png)
+![Alt text](image-6.png)
+- GET/POST방식에 따른 다른 응답이 가능하다.
+
+![Alt text](image-10.png)
+- 서버 기능을 구현하고 /write 페이지에서 내용을 작성해서 서버에 저장해보자.
+- DB 다운, 인터넷 끊김 등의 DB쪽에서 에러가 발생할 수 있으니 try, catch문을 사용하자.
+- 서버에서 validation을 체크하는 이유는, 프론트엔드에 있는 모든 것은 위조가 가능하기 때문에, 서버에서도 체크를 해야한다. 
+
+![Alt text](image-17.png)
+![Alt text](image-14.png)
+- 작성완료 -> 저장 성공 시 /list 페이지로 리다이렉트
+- 작성한 내용이 정상적으로 저장되고 리스트에 보여지는 것을 확인
+
+![Alt text](image-15.png)
+- DB가 정상적으로 저장된 것을 확인
