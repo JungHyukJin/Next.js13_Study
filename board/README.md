@@ -128,6 +128,7 @@ export default function DetailLink(){
 ![Alt text](image-13.png)
 - 더 이상 무한 로딩이 되지 않는다, 응답도 잘 받는다.
 
+# 글 작성 기능을 구현해보자
 ![Alt text](image-2.png)
 - POST 요청도 해보자.
 - 가장 쉬운 방법은 form태그를 사용하는 것이다.
@@ -138,14 +139,62 @@ export default function DetailLink(){
 - GET/POST방식에 따른 다른 응답이 가능하다.
 
 ![Alt text](image-10.png)
-- 서버 기능을 구현하고 /write 페이지에서 내용을 작성해서 서버에 저장해보자.
+- pages/api/post/new.js 에 서버 기능을 구현해보자. insertOne() api를 사용하면 새로운 글을 하나 저장할 수 있다.
 - DB 다운, 인터넷 끊김 등의 DB쪽에서 에러가 발생할 수 있으니 try, catch문을 사용하자.
 - 서버에서 validation을 체크하는 이유는, 프론트엔드에 있는 모든 것은 위조가 가능하기 때문에, 서버에서도 체크를 해야한다. 
 
 ![Alt text](image-17.png)
+- /write 페이지에서 내용을 작성 후 서버에 저장해보자.
+
 ![Alt text](image-14.png)
 - 작성완료 -> 저장 성공 시 /list 페이지로 리다이렉트
 - 작성한 내용이 정상적으로 저장되고 리스트에 보여지는 것을 확인
 
 ![Alt text](image-15.png)
 - DB가 정상적으로 저장된 것을 확인
+
+<br>
+
+---
+
+# 수정 기능을 구현해보자
+1. 글마다 수정버튼, 클릭 시 수정페이지 이동
+2. 수정페이지 진입 시 글 제목&내용이 채워져 있어야함
+3. 수정완료 클릭 시 DB에 요청 및 DB글 수정
+
+![Alt text](image-7.png)
+- updateOne({게시물정보(id)},{$set : {변경한 데이터}}) api를 사용하여 글 수정이 가능하다.
+- 게시물정보, 즉 해당 id를 가져오려면 DB에서 가져오거나 클라이언트단에서 보내줘야 한다.
+```jsx
+// app/edit\[id]/page.js
+  import { connectDB } from "@/util/database";
+  import { ObjectId } from "mongodb";
+
+  export default async function EditPage(props) {
+    const db = (await connectDB).db("forum");
+    let result = await db
+      .collection("post")
+      .findOne({ _id: new ObjectId(props.params.id) });
+
+    return (
+      <>
+        <h4>글 수정</h4>
+        <form action="/api/post/edit" method="POST">
+          <input name="_id" defaultValue={result._id.toString()} style={{display:'none'}} />
+          <input name="title" placeholder="title" defaultValue={result.title} />
+          <input
+            name="content"
+            placeholder="content"
+            defaultValue={result.content}
+          />
+          <button type="submit">수정 완료</button>
+        </form>
+      </>
+    );
+  }
+```
+- input태그에 id를 담아서 form태그 전송 시 같이 보내준다.
+- id가 적혀있는 input 태그는 간단히 display:none 스타일 처리로 숨겨준다.
+- input태그에서 value가 아닌 defaultValue를 사용한다. 기존 데이터를 쉽게 담을 수 있고, 수정도 가능하다!
+
+# 삭제기능 구현 (ajax)
