@@ -1,28 +1,12 @@
 import { connectDB } from "@/util/database";
-import Link from "next/link";
+import ListItem from "./ListItem";
+
+// 이 페이지를 보여줄 때 항상 dynamic rendering으로 보여준다
+export const dynamic = 'force-dynamic'; 
 
 export default async function ListPage() {
   const db = (await connectDB).db("forum");
   let result = await db.collection("post").find().toArray();
-  console.log(result);
 
-  return (
-    <div className="list-bg">
-      {result.map((e, i) => {
-        return (
-          // Link태그는 prefetch 기능이 내장됨.
-          // Link태그가 화면에 보이면 자동으로 내부적으로 href 페이지를 미리 로드해준다.
-          // 하지만,  모든 Link들을 prefetch할 필요는 없기 때문에(자원낭비), prefetch={false}로 disable이 가능하다.
-          // Link방법을 제외하고 다른 방법으로도 페이지를 이동시킬 수 있다. -> Readme.md 참고
-          <div className="list-item" id={e._id.toString()}>
-            <Link prefetch={false} href={`/list/${e._id}`} key={i}>
-              <h4>{e.title}</h4>
-              <p>{e.content}</p>
-            </Link>
-            <Link href={`/edit/${e._id}`}>수정버튼</Link>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <ListItem result={result} />;
 }

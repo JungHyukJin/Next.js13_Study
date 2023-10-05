@@ -8,7 +8,7 @@ export default async function NewPostAPI(req, resp) {
     try{
         let db = (await connectDB).db("forum");
         let result = db.collection("post").insertOne(req.body);
-        resp.redirect(200, "/list");
+        resp.redirect(302, "/list");
     } catch(error){
         console.log(error)
     }
