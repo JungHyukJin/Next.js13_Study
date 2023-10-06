@@ -414,4 +414,374 @@ export default function Page() {
   - 아이디/비번으로 로그인하는 옵션을 켜둔 경우에는 JWT방식을 강제로 사용해야 한다.
   - session방식은 사용이 불가능하다. -> 개발자가 직접 아이디/비번을 관리하면 복잡하고 보안이슈가 생길 수 있기 때문이다.
 
+<br>
 
+---
+
+# 소셜로그인 구현
+### 깃헙 로그인
+- Github 앱을 먼저 생성해야한다.
+- Github.com 로그인 후 메뉴버튼 클릭 -> Settings -> Developer settings -> New OAuth app 에서 만든다.
+
+![Alt text](image-25.png)
+- Github에 있는 유저의 개인정보 조회 권한을 잠깐 위임받아야 하기 때문에 만들어두어야 한다.
+
+![Alt text](image-24.png)
+- 주소와 이름을 적어야 한다.
+
+![Alt text](image-27.png)
+- ID와 Secret키를 발급받은 후 secret키는 이후에 다시 볼 수 없다고 경고 메시지가 뜬다. 작 적어두자.
+
+### NextAuth 라이브러리 셋팅
+
+```bash
+  # 라이브러리 설치 
+  npm install next-auth
+```
+
+```jsx
+import NextAuth from "next-auth";
+import GithubProvider from "next-auth/providers/github";
+
+export const authOptions = {
+  providers: [
+    GithubProvider({
+      clientId: '깃헙에서 발급받은 ID',
+      clientSecret: '깃헙에서 발급받은 Secret Key',
+    }),
+    // GoogleProvider({
+    //   clientId: '',
+    //   clientSecret: '',
+    // }),
+  ],
+  secret : 'JWT생성 시 사용할 암호'
+};
+export default NextAuth(authOptions); 
+```
+- pages/api/auth/[...nextauth].js 경로에 해당 파일을 만들고 상단 코드를 작성해두면 셋팅이 끝난다.
+- Github에서 발급받은 ID와 Secret Key를 잘 입력해주자.
+- 소셜로그인은 기본적으로 JWT방식이 기본이라 secret에 JWT생성용 암호도 잘 입력해두자.
+- 암호는 .env파일에 적어두고 사용하면 더 안전하다.
+  
+### 로그인 페이지, 로그인/로그아웃 버튼 및 기능
+
+```jsx
+// layout.js
+import Link from "next/link";
+import "./globals.css";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/pages/api/auth/[...nextauth]";
+import LoginBtn from "./Loginbtn";
+import LogoutBtn from "./LogoutBtn";
+
+export const metadata = {
+  title: "OnlineBoard",
+  description: "online board",
+};
+
+export default async function RootLayout({ children }) {
+  const userSession = await getServerSession(authOptions); //서버컴포넌트, 서버기능안에서 사용 가능한 함수
+  console.log("userSession", userSession);
+  return (
+    <html>
+      <body>
+        <div className="navbar">
+          <Link href="/" className="logo">
+            ForumLogo
+          </Link>
+          <Link href="/list">List</Link>
+          <Link href="/write">Write</Link>
+          {userSession ? <LogoutBtn /> : <LoginBtn /> }
+        </div>
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+- userSession 유무에 따라 로그인/로그아웃 버튼 보여주기
+
+```jsx
+// 로그인
+"use client";
+import { signIn } from "next-auth/react";
+
+export default function LoginBtn() {
+  return (
+    <button onClick={() => {signIn()}}> 
+      로그인 
+    </button>
+  );
+}
+```
+- 로그인/로그아웃 버튼에 onClick을 사용해야 하니 따로 client component를 만들어 구현하고 import로 사용하자.
+- onClick에 signIn/signOut만 사용하면 간단히 로그인/로그아웃 기능 구현이 완료된다.
+- 잊지말고 import 하자
+```jsx
+const userSession = await getServerSession(authOptions)
+```
+- 상단 코드는 server component의 경우에만 사용 가능하다.
+- client component에서 사용하려면 하기 코드를 사용해야 한다.
+```jsx
+// layout.js
+'use client'
+
+import { SessionProvider } from "next-auth/react"
+
+export default function Layout({ children }){
+  return (
+    <SessionProvider>
+      {children}
+    </SessionProvider>
+  )
+}
+```
+- `<SessionProvider>`를 import하고 부모 컴포넌트를 감싸면 자식 컴포넌트들에서 `useSession()`이라는 함수를 이용하여 사용이 가능하다. 
+```jsx
+// page.js
+'use client'
+
+import { useSession } from 'next-auth/react'
+
+export default function Page(){
+  let session  = useSession();
+  if (session) {
+    console.log(session)
+  }
+  
+  // (생략)
+```
+- 보통 server compoennt에서 유저 정보를 가져와서 client component로 전송해주는 게 나을 수 있다.
+- 이유는 useSession함수는 html이 다 보여지고 그 후 한 박자 늦게 실행될 수 있다.
+
+### 소셜 로그인 단점
+- 제3자의 사이트에 의존하는 방법이기 때문에
+  - 시간이 흐르고 해당 사이트의 사용량이 적어지면 소셜로그인 사용이 애매해질 수 있고
+  - 예전에 발생했던 카카오톡 서버 화재 사태처럼 해당 사이트에 문제가 생기면 소셜로그인 사용이 불가하다.
+
+### OAuth + session방식 사용 (JWT방식 X)
+- DB adapter를 사용해야 한다.
+- DB adapter 사용 시
+  - 첫 로그인 시 자동회원가입(DB에 보관)
+  - 로그인 시 DB에 세션정보 보관
+  - 현재 로그인된 유저정보가 필요하면 DB에 조회해서 확인
+
+```bash
+# mongoDB adapter 설치
+npm install @next-auth/mongodb-adapter 
+```
+- mongoDB말고 다른 DB에 유저 세션을 저장하고 싶다면 다른 DB adapter를 찾아서 사용하면 된다.
+- redis같은 것을 사용하면 데이터 저장 시 하드말고 램을 사용하기 때문에 빨라서 session 방식을 구현할 때 인기가 좋다.
+
+![Alt text](image-26.png)
+- `adapter : MongoDBAdapter(connectDB),`를 추가해주자.
+
+![Alt text](image-28.png)
+- 로그인해보면 mongoDB에 3개의 컬렉션이 생성된다.
+- sessions : 현재 로그인된 유저 정보가 들어있다.
+- users : 유저들을 보관하는 곳이다. 유저끼리는 이메일로 구분한다.
+- accounts : 유저 계정을 보관하는 곳이다.
+- 하나의 유저는 여러개의 계정을 가지고 있을 수 있기 때문에 여러 계정마다 이메일이 중복될 수 있다.
+
+### user vs accounts 차이
+- 1명의 유저가 사이트에 github, google가입 전부를 했을 때, 계정이 둘 다 example@naver.com으로 되어있을 때, user 컬렉션에 example@naver.com 이메일을 가진 document가 1개만 생성이된다.
+- accounts 컬렉션에는
+  - example@naver.com + Github이 써있는 document 
+  - example@naver.com + Google이 써있는 document 
+  - 이렇게 두 가지가 생성된다.
+- 유저는 1명이지만 계정은 2개 이상 생성이 가능하다.(이메일이 같으면 같은 유저라고 자동으로 간주된다.)
+
+### 회원 로그인 후 새로운 글 생성
+```jsx
+// new.js 수정
+
+export default async function NewPostAPI(req, resp) {
+  // 하기 코드 추가
+  const userSession = await getServerSession(req, resp, authOptions);
+  if (userSession) {
+    // author 추가 (글 생성자가 누구인지 확인용, 이후 수정 삭제 때도 사용)
+    req.body.author = userSession.user.email;
+  }
+  
+  // 기존 코드
+  if (req.method === "POST") {
+    if (req.body.title === "") {
+      return resp.status(500).json("제목을 작성해주세요");
+    }
+    try {
+      let db = (await connectDB).db("forum");
+      let result = db.collection("post").insertOne(req.body);
+      resp.redirect(302, "/list");
+    } catch (error) {
+      console.log(error);
+    }
+  }
+}
+```
+
+### 회원 로그인 후 글 삭제
+```jsx
+// delete.js 삭제
+
+export default async function DeletePostAPI(req, resp) {
+  if (req.method === "DELETE") {
+    try {
+      const userSession = await getServerSession(req, resp, authOptions);
+      const db = (await connectDB).db("forum");
+      let checkUser = await db
+        .collection("post")
+        .findOne({ _id: new ObjectId(req.body) });
+      if (userSession && checkUser.author === userSession.user.email) {
+        let result = await db
+          .collection("post")
+          .deleteOne({ _id: new ObjectId(req.body) });
+        if (result.deletedCount === 0) {
+          console.log("1");
+          return resp.status(500).json("삭제실패");
+        } else {
+          console.log("2");
+          return resp.status(200).json("삭제완료");
+        }
+      } else {
+        console.log("3");
+        return resp.status(500).json("작성자와 현재 유저 불일치");
+      }
+    } catch (error) {
+      console.log("4");
+      resp.status(500).json("삭제실패");
+    }
+  }
+}
+```
+
+### 아이디/비번 + JWT 사용 회원기능 만들기
+- 아이디/비번 방식으로 로그인하고 싶다면 Next-auth 라이브러리 설정에서 Credentials provider를 선택하면 된다.
+- 이 경우 session방식 말고 강제로 JWT방식을 사용하도록 세팅되어있다.
+  - 회원가입 페이지에서 유저가 아이디/비밀번호를 서버로 제출하면
+  - 서버는 그걸 DB에 저장한다
+- 이대로 구현해보자.
+
+### 회원가입 페이지에서 유저가 아이디/비밀번호 작성
+
+```jsx
+// app/register/page.js
+
+export default function Register() {
+  return (
+    <div>
+        <form method="POST" action="/api/auth/signup">
+          <input name="name" type="text" placeholder="이름" /> 
+          <input name="email" type="text" placeholder="이메일" />
+          <input name="password" type="password" placeholder="비번" />
+          <button type="submit">id/pw 가입요청</button>
+        </form>
+    </div>
+  )
+}
+```
+- 요즘은 아이디 대신 이메일을 사용하는 것이 대세다.
+- 일종의 일관성 유지 용도라고 한다.
+
+### 서버로 DB에 저장
+```bash
+  # 비밀번호를 암호화해서 저장해야 되기 때문에 설치
+  npm install bcrypt
+```
+```jsx
+import { connectDB } from "@/util/database";
+import bcrypt from 'bcrypt'
+
+export default async function SignupAPI(req, resp) {
+    if(req.method === 'POST'){
+        const hash = await bcrypt.hash(req.body.password, 10) // 암호화, 10은 암호화정도-수정가능
+        req.body.password = hash; //암호화 후 다시 비밀번호에 넣는다. -> DB에 암호화한 상태로 저장
+        let db = (await connectDB).db('forum')
+        await db.collection('user_cred').insertOne(req.body)
+        resp.status(200).json('가입성공');
+    }
+}
+```
+
+### Credentails provider 설정
+```jsx
+// [...nextauth].js
+
+import NextAuth from "next-auth";
+import GithubProvider from "next-auth/providers/github";
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from 'bcrypt';
+import { connectDB } from "@/util/database";
+
+// 하기 코드는 mongoDB adapter 사용 시 선언
+// import { MongoDBAdapter } from "@next-auth/mongodb-adapter";
+
+export const authOptions = {
+  providers: [
+    GithubProvider({
+      clientId: process.env.CLIENT_ID,
+      clientSecret: process.env.CLIENT_SECRET,
+    }),
+    CredentialsProvider({
+      //1. 로그인페이지 폼 자동생성해주는 코드
+      name: "credentials",
+        credentials: {
+          email: { label: "email", type: "text" },
+          password: { label: "password", type: "password" },
+      },
+
+      //2. 로그인요청시 실행되는코드
+      //직접 DB에서 아이디,비번 비교하고
+      //아이디,비번 맞으면 return 결과, 틀리면 return null 해야함
+      async authorize(credentials) {
+        let db = (await connectDB).db('forum');
+        let user = await db.collection('user_cred').findOne({email : credentials.email})
+        if (!user) {
+          console.log('해당 이메일은 없음');
+          return null
+        }
+        const pwcheck = await bcrypt.compare(credentials.password, user.password);
+        if (!pwcheck) {
+          console.log('비번틀림');
+          return null
+        }
+        return user
+      }
+    }),
+  ],
+
+  //3. jwt 써놔야 잘됩니다 + jwt 만료일설정
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, //30일 (로그인 상태 유지 기간 - 하루는 24 * 60 * 60)
+  },
+
+  callbacks: {
+    //4. jwt 만들 때 실행되는 코드
+    //user변수는 DB의 유저정보담겨있고 token.user에 뭐 저장하면 jwt에 들어갑니다.
+    jwt: async ({ token, user }) => {
+      if (user) {
+        // JWT에 기입할 정보, 어떤 정보들을 jwt에 담아서 유저에게 보낼지
+        token.user = {};
+        token.user.name = user.name;
+        token.user.email = user.email;
+      }
+      return token;
+    },
+
+    //5. 유저 세션이 조회될 때 마다 실행되는 코드
+    // 컴포넌트에서 유저의 session 데이터를 출력할 떄, 어떤 데이터를 출력 가능하게 할지
+    session: async ({ session, token }) => {
+      session.user = token.user; //유저 모든 정보
+      return session;
+    },
+  },
+
+  secret: process.env.SECRET_KEY,
+  // mongoDB adapter 사용
+  // adapter : MongoDBAdapter(connectDB), // 추가
+};
+export default NextAuth(authOptions);
+```
+- 라이브러리 사용법이기 때문에 외워서 공부할 필요는 없다. 그대로 복붙해서 사용해도 문제없다.
+- 가장 중요한 것은 2번이고, 로그인 시 아이디/비밀번호를 DB에 저장된 내용과 비교하는건 개발자가 직접 해야하니 DB상황에 맞게 수정해서 사용하자.
+- 

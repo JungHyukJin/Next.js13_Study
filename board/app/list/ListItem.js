@@ -8,19 +8,18 @@ export default function ListItem({ result }) {
       body: _id,
     })
       .then((res) => {
-        // console.log(res)
         if (res.status === 200) {
+          // console.log('성공')
+          event.target.parentElement.style.opacity = 0; // 애니메이션 효과 천천히 사라짐
+          setTimeout(() => {
+            event.target.parentElement.remove(); // 1초 사라짐 애니메이션 효과 후 화면에서 삭제
+          }, 1000);
           return res.json();
         } else {
           // 서버가 에러코드 전송 시 실행 코드
+          // console.log("실패");
+          return res.json();
         }
-      })
-      .then((res) => {
-        // 성공 시 실행 코드
-        event.target.parentElement.style.opacity = 0; // 애니메이션 효과 천천히 사라짐
-        setTimeout(() => {
-          event.target.parentElement.remove(); // 1초 사라짐 애니메이션 효과 후 화면에서 삭제
-        }, 1000);
       })
       .catch((error) => {
         // 인터넷문제로 실패 시 실행 코드
