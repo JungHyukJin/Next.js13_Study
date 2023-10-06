@@ -784,4 +784,188 @@ export default NextAuth(authOptions);
 ```
 - 라이브러리 사용법이기 때문에 외워서 공부할 필요는 없다. 그대로 복붙해서 사용해도 문제없다.
 - 가장 중요한 것은 2번이고, 로그인 시 아이디/비밀번호를 DB에 저장된 내용과 비교하는건 개발자가 직접 해야하니 DB상황에 맞게 수정해서 사용하자.
-- 
+
+<br>
+
+---
+
+# 댓글 기능 만들기 - 조회, 생성
+- client component로 만들어보자.
+- client-side rendering을 하면 브라우저에서 html을 생성, 수정, 삭제를 해줄 수 있기 때문에 부드럽고 이쁜 사이트를 만들 수 있다. 단점은 검색노출인데, 댓글 기능이라 별로 상관 없을 것 같다.
+  - 유저가 댓글 작성 및 전송
+  - 서버로 보내서 DB에 댓글 저장, 끝.
+
+### 댓글 UI, 댓글 내용 서버로 전송
+```jsx
+// list/[id]/page.js
+
+export default async function ListDetailPage(props) {
+  const db = (await connectDB).db("forum");
+  let result = await db
+    .collection("post")
+    .findOne({ _id: new ObjectId(props.params.id) });
+  return (
+    <>
+      <div>상세페이지</div>
+      <h4>{result.title}</h4>
+      <p>{result.content}</p>
+      <Comment id={result._id.toString()}/> 
+    </>
+  );
+}
+```
+```jsx
+// list/[id]/Comment.js
+
+"use client";
+import { useEffect, useState } from "react";
+
+export default function Comment(props) {
+  const [comment, setComment] = useState("");
+  useEffect(() => {
+    fetch();
+  }, []);
+  return (
+    <div>
+      <p>댓글목록</p>
+      <input
+        placeholder="comment"
+        onChange={(e) => {
+          setComment(e.target.value);
+        }}
+      />
+      <button
+        onClick={() => {
+          fetch("/api/comment/new", {
+            method: "POST",
+            body: JSON.stringify({ comment: comment, _id: props.id }),
+          });
+        }}
+      >
+        댓글전송
+      </button>
+    </div>
+  );
+}
+```
+- list의 상세페이지 옆에 `Comment.js` 컴포넌트를 만들고 상세 페이지에 넣었다.
+- 리액트에서 input 값을 사용하고 싶으면 `<form>`태그를 쓰면 되는데, ajax로 보내고 싶으면 보통 state로 관리한다.
+
+### 서버로 댓글 전송
+```jsx
+// api/comment/new
+
+import { connectDB } from "@/util/database";
+import { ObjectId } from "mongodb";
+import { authOptions } from "../auth/[...nextauth]";
+import { getServerSession } from "next-auth";
+
+export default async function NewCommentAPI(req, resp) {
+  const userSession = await getServerSession(req, resp, authOptions);
+  // console.log('@@@@@@@@@ userSession @@@@@@@@@@@', userSession)
+
+  if (!userSession) { return } // 로그인 아닐 시 처리
+  
+  if (req.method === "POST") {
+    let parseData = JSON.parse(req.body);
+    let commentData = {
+      content: parseData.comment,
+      parent: new ObjectId(parseData._id),
+      author: userSession.user.email, //클라이언트단에서 보내면 위조 가능성이 있기에 서버에서 받아서 사용
+    };
+    const db = (await connectDB).db("forum");
+    let result = await db.collection("comment").insertOne(commentData);
+    resp.status(200).json("저장완료");
+  }
+}
+```
+- 댓글을 저장하기 전에 if문으로 빈칸체크, 길이체크, 로그인여부 등을 체크하면 더 완벽하다.
+
+### DB저장
+![Alt text](image-29.png)
+- 글 document 안에 댓글을 저장해도 된다.
+- 하지만 예로 댓글이 1억개가 생기면 1억개를 배열로 집어 넣는다고 가정했을 때, 문제가 발생할 수 있다. 검색, 수정, 삭제 등이 어려울 것이다.
+- 이런 이유 때문에 새로운 collection을 만들고 댓글 1개당 document 1개를 발행하는 것이 좋다.
+
+![Alt text](image-30.png)
+- 나중에 데이터가 많아져도 저장, 수정, 삭제, 출력이 잘 되면 잘 저장한 것이다.
+- 데이터가 많아졌을 때 수정, 삭제, 출력이 어려울 것 같다면 다른 document로 빼서 사용해보자.
+
+### 댓글 조회 기능
+1. 컴포넌트 로드 시 서버에서 댓글 가져오기
+2. 가져온 데이터 state에 저장한다
+3. state 데이터를 html에 뿌린다
+
+```jsx
+// Comment.js
+"use client";
+import { useEffect, useState } from "react";
+
+export default function Comment(props) {
+  const [comment, setComment] = useState("");
+  const [data, setData] = useState([]);
+  useEffect(() => {
+    fetch(`/api/comment/list?id=${props.id}`)
+      .then((res) => res.json())
+      .then((result) => {
+        setData(result);
+      });
+  }, [data]);
+  return (
+    <div>
+      <hr></hr>
+      <p>댓글 목록</p>
+      {data.length > 0
+        ? data.map((e, i) => {
+            return <p key={i}>{e.content}</p>;
+          })
+        : "댓글 없음"}
+      <input
+        value={comment}
+        placeholder="comment"
+        onChange={(e) => {
+          setComment(e.target.value);
+        }}
+      />
+      <button
+        onClick={() => {
+          fetch("/api/comment/new", {
+            method: "POST",
+            body: JSON.stringify({ comment: comment, _id: props.id }),
+          }).then(() => {
+            setComment("");
+          });
+        }}
+      >
+        댓글전송
+      </button>
+    </div>
+  );
+}
+```
+- useEffect() dependency에 data를 추가하여 댓글을 남기면 setData로 data가 변경되면 댓글data를 다시 로드해 화면에 보여주는 것을 추가.
+- input에 value를 커맨트로 추가하여 전송이 완료되면 .then()으로 프로미스를 받아서 input을 비워주기.
+- 댓글 목록 조회는 GET에 query string을 사용하여 정보를 가져옴
+
+```jsx
+// api/comment/list.js
+
+import { connectDB } from "@/util/database";
+import { ObjectId } from "mongodb";
+
+export default async function CommentListAPI(req, resp) {
+  const db = (await connectDB).db("forum");
+  let result = await db.collection("comment").find({ parent: new ObjectId(req.query.id) }).toArray();
+  resp.status(200).json(result);
+}
+```
+- req.query.id로 클라이언트 컴포넌트에서 쿼리스트링으로 보낸 id를 사용한다.
+- 해당 id에 해당하는 모든 댓글들을 가져와 배열로 전달한다.
+- find().함수는 안에 조건을 입력하면, 해당 조건과 일치하는 document를 가져온다. 일종의 간단한 쿼리문/검색 기능이다.
+- find()만 사용하면 모든 댓글 document를 다 가져온다.
+
+<br>
+
+---
+
+# loading.js, error.js, not-found.js

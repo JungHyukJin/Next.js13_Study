@@ -31,8 +31,8 @@ export const authOptions = {
           console.log('해당 이메일은 없음');
           return null
         }
-        // console.log('1111111111',credentials.password)
-        // console.log('2222222222',user.password)
+        // console.log('1',credentials.password)
+        // console.log('2',user.password)
         // 콘솔로 찍어보면 user.password는 입력한 그대로 나오지만, bcrypt.compare()함수로 암호화한 상태로 비교하는듯 보인다.
         const pwcheck = await bcrypt.compare(credentials.password, user.password);
         if (!pwcheck) {
