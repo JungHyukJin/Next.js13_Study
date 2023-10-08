@@ -969,3 +969,120 @@ export default async function CommentListAPI(req, resp) {
 ---
 
 # loading.js, error.js, not-found.js
+
+### 로딩 중 UI는 loading.js
+- server-side rendering의 단점은 페이지 이동 시 새로고침이 된다는 것이다. Next.js에선 페이지를 이동해도 새로고침이 잘 되지 않는데, `<Link>`태그 등으로 페이지 이동 시 새로고침이 아니라 꼭 필요한 부분만 변경되도록 세팅이 되어 있어서 그렇다.
+- 요즘 브라우저들은 다른 페이지로 이동 시 이전 페이지 레이아웃을 최대한 유지한 상태로 이동하려고 하기 때문에, 예전처럼 브라우저를 통재로 로딩하는 느낌이 없어져서 훨씬 브라우징 환경이 좋아졌다.
+- 하지만 페이지가 크거나 인터넷이 느리면 이동 시 몇 초의 딜레이가 생기기 마련인데, 이 대기시간 동안은 아무반응이 없다면 UX측면으로 좋지 않다. 그래서 loading UI가 필요하다.
+
+![Alt text](image-31.png)
+- page.js 옆에 loading.js라는 이름으로 파일을 만들어두면 page.js 로드 전에 loading.js안에 있는 내용을 미리 보여준다.
+  
+```jsx
+// loading.js
+export default function loading() {
+  return (
+    <h4>@@@@@@@로딩중@@@@@@@</h4>
+  )
+}
+```
+- client component에서도 사용이 가능하다.
+- 리액트에서의 `<Suspense fallback={<h4>로딩중...</h4>}>`이랑 같은 역할을 하지만 Next.js에선 개발자가 편하라고 loading.js파일에 적으면 자동으로 바꿔서 실행해준다.
+
+### 에러는 error.js
+- 페이지 로드 시 에러가 나는 경우
+- 서버가 죽거나, DB상에서 데이터를 가져오지 못하거나 그런 경우 에러가 발생한다.
+- 이 경우 직접 if문과 try/catch문법 등으로 사용해서 처리할 수 있지만, error.js로 처리가 가능하다.
+
+![errorImg](image-33.png)
+- page.js에서 error가 생기면 옆에 error.js파일을 보여주는데, 옆에 없으면 상위 폴더를 확인해서 있는 error.js를 보여준다. 이미지는 app폴더인 최상위 폴더에 error.js를 하나만 만들어두었다. 모든 에러는 해당 error.js를 보여준다.
+- loading.js파일도 컴포넌트로 보여줄 수도 있고, 최상위에 하나만 생성 후 해당 파일만 보여줄 수도 있다.
+```jsx
+'use client'
+
+export default function error({error, reset}) {
+    console.log(error)
+  return (
+    <div>
+        <div>에러남222</div>
+        <button onClick={()=>{reset()}}>새로고침</button>
+    </div>
+  )
+}
+```
+- error.js는 항상 client component만 넣을 수 있다.
+- error라는 props를 출력해보면 에러 내용을 알 수 있다.
+- reset이라는 props를 ()붙여서 사용하면 해당 페이지를 다시 로드해준다.
+
+![Alt text](image-32.png)
+- 옛날 웹사이트들처럼 에러가 생기면 페이지 전체가 다운되지 않고, 에러가 발생한 page.js 부분에서만 error.js를 대체해서 보여줄 수 있기 때문에, 좀더 완성도 있는 사이트를 만들 수 있다.
+- 그래서 중요한 페이지마다 error.js를 추가해두면 좋다.
+
+### 참고 : global-error.js
+- layout.js에서 에러가 발생하면 옆에 있는 error.js가 아니라 상위에 있는 error.js에서 에러를 보여준다.
+- Next.js에서는 페이지를 만들 때 같은 폴더 안에 layout.js, error.js, loading.js, page.js 컴포넌트가 있으면 아래와 같이 보여준다.
+```jsx
+<Layout>
+  <Error fallback={자식들 내용이 에러시 보여줄 error.js 내용}>
+    <Loading fallback={자식들 내용이 로딩시 보여줄 loading.js 내용}>
+      page.js 내용~~
+    </Loading>
+  </Error>
+</Layout>
+```
+- 실제로 이렇게 감싸서 하나를 보여준다.
+- layout.js는 옆에 있는 error.js를 감싸지 않기 때문에, 상위에서 error.js를 찾아서 보여준다.
+- 그래서 global-error.js가 있으면 좋다.
+- 루트 경로에 있는 layout.js에서 에러가 발생하면 보여줄 error.js가 없기 때문이다.
+- 최상위 layout.js 옆에 global-error.js파일을 만들어두면 layout.js에서 에러가 발생할 때 옆에 global-error.js를 보여준다.
+
+```jsx
+// app/global-error.js
+export default function Error({error, reset}){
+  return (
+    <div>
+      <h4>에러</h4>
+      <button onClick={()=>{ reset() }}>다시시도</button>
+    </div>
+  )
+}
+```
+
+### not-found.js
+- 존재하지 않는 URL로 접속하는 경우 유저에게 해당 페이지가 존재하지 않는다고 알려주는 것이 좋다. - 404페이지를 말한다.
+- Next.js에서 없는 URL을 입력하면 Next.js에서 자동으로 404 page not found 페이지를 보여준다. 사실 직접 만들 필요는 없다.
+- 하지만 URL을 이상하게 입력했을 때 404페이지가 아니라 에러 메세지가 먼저 나오는 경우도 있기 때문에, 404 페이지도 만들어 두는 것이 좋다.
+
+- 첫 번째 방법은 직접 page.js에 코딩하는 것이다.
+```jsx
+// app/list/[id]/page.js
+// import notFound from "./not-found"; // not-found.js사용 시
+
+export default async function ListDetailPage(props) {
+  const db = (await connectDB).db("forum");
+  let result = await db
+    .collection("post")
+    .findOne({ _id: new ObjectId(props.params.id) });
+
+    // 404페이지 처리
+    if(result === null){
+      return <div>404 | 없는 페이지</div>
+      // return notFound(); // not-found.js사용 시
+    }
+
+  // 코드 생략...
+  );
+}
+```
+
+
+- 두 번째 방법은 not-found.js를 활용하는 것이다.
+```jsx
+// not-found.js
+export default function notFound() {
+  return (
+    <div>404 | 존재하지 않는 페이지입니다.</div>
+  )
+}
+```
+- not-found.js페이지도 없으면 계속 상위폴더에서 찾기 때문에, app폴더에 not-found.js 파일 하나만 만들어 두고 사용해도 된다.
