@@ -1086,3 +1086,260 @@ export default function notFound() {
 }
 ```
 - not-found.js페이지도 없으면 계속 상위폴더에서 찾기 때문에, app폴더에 not-found.js 파일 하나만 만들어 두고 사용해도 된다.
+  
+<br>
+
+---
+
+# 이미지 업로드 기능 - AWS S3 세팅
+- Vercel에 올려놨거나 AWS인스턴스를 여러개 만든 경우 이용이 난감한 경우가 있기 때문에 AWS S3같은 파일 저장용 클라우드 서비스를 빌려서 거기에 업로드 하는 것이 좋다.
+- 구글 firebase storage도 사용할 수 있는데, 5GB까지 평생 무료
+
+### AWS S3세팅
+- AWS 로그인 후 S3 검색, 버킷 만들기 클릭
+
+![Alt text](image-34.png)
+- 버킷은 개인 저장공간이다. 작명은 유니크하게 해주자.
+
+![Alt text](image-35.png)
+- 퍼블릭 액세스 설정은 이렇게 해줘야 개발 시 편하다.
+
+### 버킷 정책 수정하기
+- 보안을 생각해서 일반 사람들은 읽기만 가능하게 하고, 관리자는 수정, 삭제가 가능하게 바꿔줘야 한다.
+
+![Alt text](image-36.png)
+- 권한 클릭 -> 버킷 정책 편집 클릭
+- 누가 버킷을 읽기, 수정, 삭제 할 수 있는지 정의하는 부분
+
+```jsx
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "1",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::forumpractice/*"
+        },
+        {
+            "Sid": "2",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::AWS계정(숫자):root"
+            },
+            "Action": [
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::forumpractice/*"
+        }
+    ]
+}
+```
+- 1번은 모든 유저가 GET이 가능하고,
+- 2번은 관리자만 PUT, DELETE가 가능하다.
+- Principal은 어떤 유저인지 명시하는 부분인데, AWS계정ID를 넣으면 된다.(사이트 우측 상단 확인)
+  - 읽기는 s3:GetObject
+  - 쓰기는 s3:PutObject
+  - 삭제는 s3:DeleteObject
+- Resource는 어떤 버킷인지 버킷명을 적으면 된다.
+
+### CORS설정
+```jsx
+[
+    {
+        "AllowedHeaders": [
+            "*"
+        ],
+        "AllowedMethods": [
+            "PUT",
+            "POST"
+        ],
+        "AllowedOrigins": [
+            "*"
+        ],
+        "ExposeHeaders": [
+            "ETag"
+        ]
+    }
+]
+```
+- 어떤 사이트에서 버킷 안의 파일들을 읽기, 쓰기, 삭제할 수 있는지 CORS설정을 하는 부분이다.
+- 다른 사이트에서 자료 쓰기, 삭제를 못하게 하려면 AllowedOrigins안에 본인 사이트 주소를 넣으면 된다. (*는 전체 허용)
+
+### Access 키 발급
+- 서버에서 S3로 접속하고 이미지 관련 작업을 하고 싶다면 코딩할 때 Access Key를 기입해줘야 한다.
+- 발급을 위해 IAM를 검색해서 들어가자.
+- 우측 상단 이름을 클릭 후 보안 자격 증명을 클릭해도 된다.
+- 액세스키를 만들고 키와 비밀키 2개 세트를 안전한 곳에 보관해두자.
+- 분실 시 지우고 새로 만들면 된다.
+- 키 노출은 꼭 조심해야 된다. 해킹 당해서 잘못 사용되면 어마어마한 요금 폭탄을 맞을 수 있다.
+
+### Presigned URL
+- 유저가 업로드 할 이미지를 선택하면 유저에게 미리 보여줘야 한다.
+- createObjectURL을 사용해서 보여줄 수도 있지만, 다른 방법으로 해보자.
+- `<input type='file'/>`에서 이미지를 고르면 바로 S3에 저장하면 된다. 
+- 저장 후 이미지 URL을 `<img src='' />`안에 넣으면 이미지를 보여줄 수 있다.
+- 예전에는 직접 서버에서 이미지를 업로드하는 방식으로 개발을 했지만, 
+- 요새는 S3에서 Presigned URL이라는 방식으로 이미지를 업로드한다.
+- Presigned URL을 가진 유저는 브라우저에서 서버를 통하지 않고 직접 S3에 업로드가 가능한데, 이 방식을 사용하면 서버 부담이 줄어들어 사용하기에 좋다.
+  - 글 작성 페이지의 `<input/>`에 유저가 이미지를 고르는 순간 서버에 GET요청을 한다.
+  - 서버는 유저 확인 후 Presigned URL을 만들어서 유저 브라우저로 보내준다.
+  - 유저는 브라우저에서 Presigned URL을 이요해서 S3로 POST요청 후 바로 이미지를 보낸다.
+  - 업로드 성공 시 업로드된 이미지의 URL을 `<img src='' />`에 넣어서 이미지 업로드된 것을 보여준다.
+
+![Alt text](image-37.png)
+- 이런식으로 코딩하면 된다, next.js 공식 예제로 나와있다.
+
+### 서버에서 Presigned URL 가져오기
+```jsx
+// write/page.js
+"use client";
+
+import { useState } from "react";
+
+export default function WritePage() {
+  const [img, setImg] = useState('');
+  return (
+    <>
+      <h4>글 작성</h4>
+      <form action="/api/post/new" method="POST">
+        <input name="title" placeholder="title" />
+        <input name="content" placeholder="content" />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={ async(e) => {
+            let file = e.target.files[0];
+            let encodedFileName = encodeURIComponent(file.name);
+            let res = await fetch(`/api/post/image?file=${encodedFileName}`);
+            res = await res.json();
+
+            //S3 업로드
+            const formData = new FormData();
+            Object.entries({ ...res.fields, file }).forEach(([key, value]) => {
+              formData.append(key, value);
+            });
+
+            let uploadResp = await fetch(res.url, {
+              method: "POST",
+              body: formData,
+            });
+            console.log(uploadResp);
+
+            if (uploadResp.ok) {
+              setImg(uploadResp.url + "/" + encodedFileName);
+            } else {
+              console.log("실패");
+            }
+          }}
+        />
+        <img src={img} style={{width: '100px'}}/>
+        <button type="submit">작성완료</button>
+      </form>
+    </>
+  );
+}
+```
+- 이미지 선택용 `<input>, <img>`태그 생성
+- onChange()안에 파일 선택 시 파일 이름 가져오기
+- 서버로 Presigned URL GET으로 요청, 파일 이름도 같이 전송
+  
+### 서버에서 Presignedz URL 발급해서 보내주기
+```jsx
+// /api/post/image.js
+import aws from "aws-sdk"; // 라이브러리 설치
+export default async function handler(req, resp) {
+    //라이브러리 사용을 위한 셋팅
+  aws.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY,
+    secretAccessKey: process.env.AWS_SECRET_KEY,
+    region: "ap-northeast-2",
+    signatureVersion: "v4",
+  });
+
+  const s3 = new aws.S3();
+  const url = await s3.createPresignedPost({
+    // Presigned URL 발급
+    Bucket: process.env.AWS_BUCKET_NAME,
+    Fields: { key: req.query.file }, // 유저가 선택한 파일명 기재
+    Expires: 60, // seconds
+    Conditions: [
+      ["content-length-range", 0, 1048576], //파일용량 1MB 까지 제한
+    ],
+  });
+  resp.status(200).json(url);
+}
+```
+- `npm install aws-sdk`로 라이브러리 설치
+- aws.config.update 안에 정보 채우기 -> .env 파일을 사용하자!
+- createPresginedPost 함수를 이용해서 Presigned URL 발급.
+- key 옆에 유저가 보낸 파일 이름 기입
+- 업로드 가능한 최대 용량, 제한시간 설정도 가능
+
+### S3로 업로드하기
+```jsx
+// write/page.js
+"use client";
+
+import { useState } from "react";
+
+export default function WritePage() {
+  const [img, setImg] = useState('');
+  return (
+    <>
+      <h4>글 작성</h4>
+      <form action="/api/post/new" method="POST">
+        <input name="title" placeholder="title" />
+        <input name="content" placeholder="content" />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={ async(e) => {
+            let file = e.target.files[0];
+            let encodedFileName = encodeURIComponent(file.name);
+            let res = await fetch(`/api/post/image?file=${encodedFileName}`);
+            res = await res.json();
+
+            //S3 업로드
+            const formData = new FormData();
+            Object.entries({ ...res.fields, file }).forEach(([key, value]) => {
+              formData.append(key, value);
+            });
+
+            let uploadResp = await fetch(res.url, {
+              method: "POST",
+              body: formData,
+            });
+            console.log(uploadResp);
+
+            if (uploadResp.ok) {
+              setImg(uploadResp.url + "/" + encodedFileName);
+            } else {
+              console.log("실패");
+            }
+          }}
+        />
+        <img src={img} style={{width: '100px'}}/>
+        <button type="submit">작성완료</button>
+      </form>
+    </>
+  );
+}
+```
+- 폼데이터 전송 시 `<form></form>`태그 사용이 귀찮으면 new formData()를 쓰고 데이터를 넣으면 된다.
+- 서버에서 받아온 res라는 변수 안에 데이터들과 이미지를 formData안에 넣고
+- res.url 경로로 전송하면 된다. 그럼 S3에 이미지가 올라간다.
+- uploadResp.url뒤에 /파일이름만 붙이면 방금 업로드한 이미지 경로이다.
+- 이미지 경로를 `<img src='' />`에 넣어서 보여주면 된다.
+
+![Alt text](image-38.png)
+![Alt text](image-39.png)
+- 잘 저장된다.
+- 이제 글 발행 시에 URL도 함께 DB에 저장해두면 상세 페이지에서 같이 보여줄 수 있다.
+- client component라서 글 발행 시 ajax요청으로 폼 전송으로 하면 된다.
+- *중요* : 
+  - 지금은 선택과 동시에 이미지를 업로드를 하기 때문에 글 발행을 하지 않고 취소하면 S3 저장 용량 낭비가 될 수 있다.
+  - 그러면 글 발행을 누를 때 이미지를 업로드 시키면 된다.
+  - 이 방법은 createObjectURL을 사용하면 된다.
