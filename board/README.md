@@ -1343,3 +1343,150 @@ export default function WritePage() {
   - 지금은 선택과 동시에 이미지를 업로드를 하기 때문에 글 발행을 하지 않고 취소하면 S3 저장 용량 낭비가 될 수 있다.
   - 그러면 글 발행을 누를 때 이미지를 업로드 시키면 된다.
   - 이 방법은 createObjectURL을 사용하면 된다.
+
+<br>
+
+---
+
+# 다크 모드 - local storage, cookies
+- CSS 속성 중에 prefers-color-scheme를 사용하면 자동으로 OS 테마에 맞춰서 CSS를 적용해주지만, 유저가 자유롭게 전환할 수 있게 해보자.
+- state를 만들어서 사용하는 방법도 있지만, 새로고침 하면 리셋된다. state는 영구저장이 안된다.
+- state 변경 함수는 server component 와 client component 간의 전달도 어렵다.
+- client component로 만든느 경우 server component의 캐싱기능과 같은 기능을 사용할 수 없다.
+- state말고 DB에 다크모드 여부를 저장해서 사용하는 방법도 있지만, 더 간단하게 보관하는 방법을 알아보자.
+
+![Alt text](image-40.png)
+- 크롬 개발자도구 -> application탭에 들어가면 local storage와 cookies를 볼 수 있다.
+- local storage
+  - 문자나 숫자 데이터를 저장 할 수있다.
+  - 사이트마다 5MB의 저장 공간이 주어진다.
+  - 유저가 브라우저 청소를 하지 않는 이상 반영구적으로 데이터 저장이 가능하다.
+  ```jsx 
+    localStorage.setItem('자료이름', '값')
+    localStorage.getItem('자료이름')
+    localStorage.removeItem('자료이름')
+  ```
+  - 자바스크립트 코드로 입력, 출력, 삭제가 가능하다.
+  - Object, array도 JSON으로 변환하면 저장이 가능하다.
+  - 사용 시에는
+  ```jsx
+  'use client'
+  
+  function 컴포넌트(){
+
+    useEffect(()=>{
+        if (typeof window != 'undefined') {
+          let res = localStorage.setItem('이름', 'kim')
+        }
+    },[])
+
+    return (생략)
+  } 
+  ```
+  - 자바스크립트 문법이기 때문에 client component에서만 사용이 가능하다.
+  - 사용시 if (typeof window != 'undefined')로 체크를 하고 사용해주는 것이 좋다. client component라도 최대한 서버에서 미리 실행할 수 있는 것은 실행해두고 html도 렌더링해서 보내주려고 하는데, 서버측에서는 localStorage 문법을 발견하면 에러가 나기 때문이다.
+  - 하지만 localStorage를 사용해도 심각한 단점이 있다.
+  - useEffect에 넣어서 사용해야 하는데, useEffect는 html이 보여진 다음에 실행되는 문제가 있다. 즉, localStorage에 다크모드를 저장해두고 사용하면, 라이트 모드가 먼저 보여진 후에 다크모드로 전환되는 화면이 보여진다.
+  - 그래서 cookie르 사용하는 것이 좋다.
+- cookies
+  - 사이트 당 최대 50개, 총합 4kb의 문자 데이터를 저장할 수 있다.
+  - 유효 기간을 설정할 수 있다. 유효기간이 지나면 자동으로 삭제된다.
+  - 서버로 GET, POST등 요청 시 자동으로 서버로 전달된다.
+  - ` document.cookie = '쿠키이름=값; max-age=3600'` 이렇게 자바스크립트로 쿠키 생성이 가능하다.
+  - 유효 기간은 초 단위로 설정이 가능하다.
+  - 크롬에서는 쿠키 유효기간으로 최대 400일까지 가능하다.
+  - 유효기간을 넣지 않으면 브라우저 종료시 쿠키는 자동 삭제된다.
+  - 값들 사이에 ;기호로 구분한다.
+  - 가장 유용한 점은 server component나 서버 api에서 쉽게 읽을 수 있다는 것이다. 
+  - 그래서 server-side rendering을 할 때 쿠키같은게 더 유용하다.
+  - 단점은 :
+    - 단순 문자열만 저장 할 수 있어서 너무 길고 복잡한 데이터는 보관하기 불편하다.
+    - 항상 GET, POST 요청마다 전달되니 쓸데없는 네트워크 호스팅 비용이 늘어날 수 있다.
+    - 다크모드는 짧은 문자 몇개를 전달하는 수준이니 부담은 없다.
+
+### Dark mode 구현
+- `document.cookie = 'mode=dark; max-age=' + (3600 * 24 * 400) + 'path=/'`
+- 쿠키 생성 시 뒤에 path를 적으면 원하는 /URL 접속 때만 해당 쿠키를 전송할 수 있는데, 특정 페이지에서 서버로 쿠키 전송이 되지 않으면 path=/도 추가해주자.
+- 다크모드 버튼 컴포넌트부터 만들어보자.
+```jsx
+// app/DarkMode.js
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+export default function DarkMode() {
+    let router = useRouter();
+  useEffect(() => {
+    let 쿠키값 = ("; " + document.cookie).split(`; mode=`).pop().split(";")[0];
+    if (쿠키값 === "") {
+      document.cookie = "mode=light; max-age=" + 3600 * 24 * 400;
+    }
+  }, []);
+  return (
+    <button
+      onClick={() => {
+        let 쿠키값 = ("; " + document.cookie)
+          .split(`; mode=`)
+          .pop()
+          .split(";")[0];
+        if (쿠키값 == "light") {
+          document.cookie = "mode=dark; max-age=" + 3600 * 24 * 400;
+          router.refresh();
+        } else {
+          document.cookie = "mode=light; max-age=" + 3600 * 24 * 400;
+          router.refresh();
+        }
+      }}
+    >
+      다크모드
+    </button>
+  );
+}
+```
+
+- layout.js 파일에 `<DarkMode />` 컴포넌트를 넣자.
+- client component라 따로 만들어서 넣는다.
+
+```jsx
+// app/layout.js
+import { cookies } from 'next/headers'
+
+export const metadata = {
+  title: "OnlineBoard",
+  description: "online board",
+};
+
+export default async function RootLayout({ children }) {
+  const userInfo = await getServerSession(authOptions); //서버컴포넌트, 서버기능안에서 사용 가능한 함수
+  let themeMode = cookies().get('mode');
+  // console.log('themeMode', themeMode.value)
+  
+  return (
+    <html>
+      <body className={
+        themeMode != undefined && themeMode.value == 'dark' 
+          ? 'dark-mode'
+          : ''
+      }>
+        <div className="navbar">
+          <Link href="/" className="logo">
+            ForumLogo
+          </Link>
+          <Link href="/list">List</Link>
+          <Link href="/write">Write</Link>
+          {userInfo ? <LogoutBtn /> : <LoginBtn /> }
+          <DarkMode />
+        </div>
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+- 서버 컴포넌트에서는 상단에 `import { cookies } from 'next/headers'`를 추가하고 cookies()를 사용하면 쿠키값을 출력할 수 있다.
+- 버튼을 클릭 시 cookie값이 dark면 light로, light면 dark로 바꿔주자.
+- 쿠키를 변경해주는데 class명이 변하지 않는다.
+- 이유는 cookie를 변경했다고 html이 자동으로 재랜더링이 되지 않기 때문이다.
+  - 재랜더링을 위해서는 새로고침을 하거나, state를 변경해주어야 한다.
+  - 하지만 state변경은 그 state가 들어있는 컴포넌트만 새로고침 해주기 때문에, 새로고침을 해주는 `router.refresh()`를 사용하자.

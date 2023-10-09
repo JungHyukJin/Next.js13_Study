@@ -15,9 +15,9 @@ body {
   padding: 20px;
   margin-bottom: 5px;
   box-shadow: rgb(224, 224, 224) 0px 2px 4px 0px;
-  
+
   /* 애니메이션 */
-  opacity:1;
+  opacity: 1;
   transition: all 1s;
 }
 
@@ -34,4 +34,12 @@ body {
 
 a {
   text-decoration: none;
+}
+
+.dark-mode .navbar {
+  background: #222;
+}
+
+.dark-mode .navbar a {
+  color: white;
 }
